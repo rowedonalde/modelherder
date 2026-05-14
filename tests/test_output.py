@@ -173,3 +173,51 @@ class RenderTableTests(unittest.TestCase):
         self.assertNotIn("HUGGINGFACE", out)
         self.assertNotIn("LM STUDIO", out)
         self.assertNotIn("OTHER", out)
+
+    def test_section_total_row_is_rendered(self) -> None:
+        entries = [
+            ModelEntry(SOURCE_OLLAMA, "a", "GGUF", 1024, "/tmp/a"),
+            ModelEntry(SOURCE_OLLAMA, "b", "GGUF", 2048, "/tmp/b"),
+        ]
+        out = self._render(entries)
+        self.assertIn("TOTAL", out)
+        self.assertIn(human_size(1024 + 2048), out)
+
+    def test_section_total_sums_bytes_not_human_strings(self) -> None:
+        # 1500 + 1500 bytes = 3000 bytes => "2.9 KB" via human_size.
+        # If we naively added human-readable strings ("1.5 KB" + "1.5 KB"),
+        # we'd get "3.0 KB" — make sure we don't do that.
+        entries = [
+            ModelEntry(SOURCE_OLLAMA, "a", "GGUF", 1500, "/tmp/a"),
+            ModelEntry(SOURCE_OLLAMA, "b", "GGUF", 1500, "/tmp/b"),
+        ]
+        out = self._render(entries)
+        self.assertIn(human_size(3000), out)
+
+    def test_source_other_also_has_total_row(self) -> None:
+        entries = [
+            ModelEntry(SOURCE_OTHER, "x", "GGUF", 4096, "/tmp/x.gguf"),
+            ModelEntry(SOURCE_OTHER, "y", "safetensors", 8192, "/tmp/y.safetensors"),
+        ]
+        out = self._render(entries)
+        self.assertIn("TOTAL", out)
+        self.assertIn(human_size(4096 + 8192), out)
+
+    def test_grand_total_reflects_sum_across_sections(self) -> None:
+        entries = [
+            ModelEntry(SOURCE_OLLAMA, "a", "GGUF", 100, "/a"),
+            ModelEntry(SOURCE_HUGGINGFACE, "b", "safetensors", 200, "/b"),
+            ModelEntry(SOURCE_LMSTUDIO, "c", "GGUF", 300, "/c"),
+            ModelEntry(SOURCE_OTHER, "d", "GGUF", 400, "/d"),
+        ]
+        out = self._render(entries)
+        self.assertIn(human_size(1000), out)
+        # TOTAL appears once per non-empty section plus once as a grand total.
+        self.assertGreaterEqual(out.count("TOTAL"), 5)
+
+    def test_grand_total_present_with_single_section(self) -> None:
+        entry = ModelEntry(SOURCE_OLLAMA, "only", "GGUF", 12345, "/tmp/x")
+        out = self._render([entry])
+        # Section total and grand total both equal 12345 bytes; ensure
+        # the formatted value appears at least twice.
+        self.assertGreaterEqual(out.count(human_size(12345)), 2)
