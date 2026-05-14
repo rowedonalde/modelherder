@@ -21,6 +21,11 @@ uv run modelherder
 The package also exposes a `modelherder` console script, so once installed
 into any Python environment it works as `modelherder ...` directly.
 
+## Run tests
+```sh
+uv run python -m unittest
+```
+
 ## Usage
 
 Default behaviour is a grouped table of every known source plus a stray
