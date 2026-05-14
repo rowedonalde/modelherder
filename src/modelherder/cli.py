@@ -7,12 +7,10 @@ from pathlib import Path
 from rich.console import Console
 
 from modelherder.models import (
-    ALL_SOURCES,
     ModelEntry,
     SOURCE_HUGGINGFACE,
     SOURCE_LMSTUDIO,
     SOURCE_OLLAMA,
-    SOURCE_OTHER,
 )
 from modelherder.output import render_json, render_table
 from modelherder.scanners import (
@@ -23,15 +21,12 @@ from modelherder.scanners import (
     scan_ollama,
 )
 from modelherder.scanners.huggingface import (
-    DEFAULT_HF_HUB,
     collect_known_paths as hf_known_paths,
 )
 from modelherder.scanners.lmstudio import (
-    DEFAULT_LMSTUDIO_ROOTS,
     collect_known_paths as lms_known_paths,
 )
 from modelherder.scanners.ollama import (
-    DEFAULT_OLLAMA_ROOT,
     collect_known_paths as ollama_known_paths,
 )
 
