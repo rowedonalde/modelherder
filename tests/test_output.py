@@ -184,9 +184,9 @@ class RenderTableTests(unittest.TestCase):
         self.assertIn(human_size(1024 + 2048), out)
 
     def test_section_total_sums_bytes_not_human_strings(self) -> None:
-        # 1500 + 1500 bytes = 3000 bytes => "2.9 KB" via human_size.
-        # If we naively added human-readable strings ("1.5 KB" + "1.5 KB"),
-        # we'd get "3.0 KB" — make sure we don't do that.
+        # 1500 + 1500 bytes = 3000 bytes => "2.9 KiB" via human_size.
+        # If we naively added human-readable strings ("1.5 KiB" + "1.5 KiB"),
+        # we'd get "3.0 KiB" — make sure we don't do that.
         entries = [
             ModelEntry(SOURCE_OLLAMA, "a", "GGUF", 1500, "/tmp/a"),
             ModelEntry(SOURCE_OLLAMA, "b", "GGUF", 1500, "/tmp/b"),
