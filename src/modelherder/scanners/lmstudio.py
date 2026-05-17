@@ -8,6 +8,7 @@ from modelherder.models import (
     SOURCE_LMSTUDIO,
     format_for_path,
 )
+from modelherder.scanners.basescanner import BaseScanner
 
 
 DEFAULT_LMSTUDIO_ROOTS = (
@@ -16,52 +17,55 @@ DEFAULT_LMSTUDIO_ROOTS = (
 )
 
 
-def _model_name(file: Path, root: Path) -> str:
-    """Build a name from the file's path relative to the LM Studio models root."""
-    try:
-        rel = file.relative_to(root)
-    except ValueError:
-        return file.stem
-    rel_no_ext = rel.with_suffix("")
-    return str(rel_no_ext)
+class LMStudioScanner(BaseScanner):
+    def __init__(self, roots: tuple[Path, ...] = DEFAULT_LMSTUDIO_ROOTS):
+        self.roots = roots
+        super().__init__()
 
+    def scan(self) -> list[ModelEntry]:
+        results: list[ModelEntry] = []
 
-def scan_lmstudio(roots: tuple[Path, ...] = DEFAULT_LMSTUDIO_ROOTS) -> list[ModelEntry]:
-    results: list[ModelEntry] = []
-
-    for root in roots:
-        if not root.exists() or not root.is_dir():
-            continue
-        for file in root.rglob("*"):
-            if not file.is_file():
+        for root in self.roots:
+            if not root.exists() or not root.is_dir():
                 continue
-            if file.suffix.lower() not in MODEL_EXTS:
+            for file in root.rglob("*"):
+                if not file.is_file():
+                    continue
+                if file.suffix.lower() not in MODEL_EXTS:
+                    continue
+                try:
+                    size = file.stat().st_size
+                except OSError:
+                    continue
+                results.append(
+                    ModelEntry(
+                        source=SOURCE_LMSTUDIO,
+                        name=self._model_name(file, root),
+                        format=format_for_path(file),
+                        size_bytes=size,
+                        path=str(file),
+                    )
+                )
+
+        results.sort(key=lambda e: e.name.lower())
+        return results
+
+    def collect_known_paths(self) -> set[Path]:
+        paths: set[Path] = set()
+        for root in self.roots:
+            if not root.exists():
                 continue
             try:
-                size = file.stat().st_size
+                paths.add(root.resolve())
             except OSError:
-                continue
-            results.append(
-                ModelEntry(
-                    source=SOURCE_LMSTUDIO,
-                    name=_model_name(file, root),
-                    format=format_for_path(file),
-                    size_bytes=size,
-                    path=str(file),
-                )
-            )
+                pass
+        return paths
 
-    results.sort(key=lambda e: e.name.lower())
-    return results
-
-
-def collect_known_paths(roots: tuple[Path, ...] = DEFAULT_LMSTUDIO_ROOTS) -> set[Path]:
-    paths: set[Path] = set()
-    for root in roots:
-        if not root.exists():
-            continue
+    def _model_name(self, file: Path, root: Path) -> str:
+        """Build a name from the file's path relative to the LM Studio models root."""
         try:
-            paths.add(root.resolve())
-        except OSError:
-            pass
-    return paths
+            rel = file.relative_to(root)
+        except ValueError:
+            return file.stem
+        rel_no_ext = rel.with_suffix("")
+        return str(rel_no_ext)

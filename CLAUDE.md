@@ -19,11 +19,17 @@ src/modelherder/
   output.py       # Rich tables (grouped per source) + JSON renderer
   sizes.py        # human-readable byte formatting
   scanners/
-    huggingface.py
-    ollama.py
-    lmstudio.py
-    stray.py
+    basescanner.py  # empty marker class; scanners inherit from BaseScanner
+    huggingface.py  # HuggingFaceScanner
+    ollama.py       # OllamaScanner
+    lmstudio.py     # LMStudioScanner
+    stray.py        # StrayScanner + default_skip_dirs()
 ```
+
+Each source scanner is a class with `scan()` (returns/yields
+`ModelEntry`s) and `collect_known_paths()` (returns `set[Path]` for the
+stray scan to skip). `StrayScanner.scan()` is a generator — see "Ctrl-C
+during stray scan" below.
 
 `main.py` at the repo root is a thin shim so `uv run main.py` still works.
 Real entry points are `uv run modelherder` and `python -m modelherder`.
@@ -40,6 +46,11 @@ Real entry points are `uv run modelherder` and `python -m modelherder`.
 
 If adding tests, use `unittest` (project preference, not `pytest`). Place
 them under `tests/` and run with `uv run python -m unittest`.
+
+Scanner-level integration tests live in `tests/scanners/` and run against
+fixtures under `tests/scanners/fakemodels/` (tiny on-disk fakes for ollama
+manifests + blobs, HF snapshot trees, LM Studio model dirs, and a stray
+walk root). Keep new fixture files minimal — they're checked in.
 
 ## Non-obvious design decisions
 
@@ -79,7 +90,7 @@ snapshots pointing at the same blob count once.
 ### Ollama display names
 
 Manifests live at `manifests/{registry}/{namespace}/{name}/{tag}`. The
-display logic in `_display_name`:
+display logic in `OllamaScanner._display_name`:
 
 - `registry.ollama.ai` + `library` namespace → `name:tag` (e.g. `gemma3:4b`)
 - `registry.ollama.ai` + other namespace → `namespace/name:tag`
@@ -100,13 +111,13 @@ piping `--json` to `jq` works without contamination.
 
 `cli.py` wraps the stray loop in `try/except KeyboardInterrupt`, accumulating
 into a list as entries are yielded so partial results survive a cancel.
-Don't refactor the scanner to return a fully-realized list — the generator
-shape is what makes Ctrl-C produce meaningful output.
+Don't refactor `StrayScanner.scan()` to return a fully-realized list — the
+generator shape is what makes Ctrl-C produce meaningful output.
 
 ## Things to avoid
 
-- Don't reintroduce a "must be under $HOME" filter in `iter_stray`. It
-  breaks `--path` and is redundant with not following symlinks.
+- Don't reintroduce a "must be under $HOME" filter in `StrayScanner.scan`.
+  It breaks `--path` and is redundant with not following symlinks.
 - Don't auto-follow HF snapshot symlinks via `Path.resolve()` in a way that
   loses the snapshot path — output uses snapshot paths intentionally
   (the user wants to know which snapshot).

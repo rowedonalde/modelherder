@@ -14,20 +14,11 @@ from modelherder.models import (
 )
 from modelherder.output import render_json, render_table
 from modelherder.scanners import (
+    HuggingFaceScanner,
+    LMStudioScanner,
+    OllamaScanner,
+    StrayScanner,
     default_skip_dirs,
-    iter_stray,
-    scan_huggingface,
-    scan_lmstudio,
-    scan_ollama,
-)
-from modelherder.scanners.huggingface import (
-    collect_known_paths as hf_known_paths,
-)
-from modelherder.scanners.lmstudio import (
-    collect_known_paths as lms_known_paths,
-)
-from modelherder.scanners.ollama import (
-    collect_known_paths as ollama_known_paths,
 )
 
 
@@ -108,31 +99,36 @@ def main(argv: list[str] | None = None) -> int:
 
     entries: list[ModelEntry] = []
 
+    ollama_scanner = OllamaScanner()
+    hugging_face_scanner = HuggingFaceScanner()
+    lmstudio_scanner = LMStudioScanner()
+
     if SOURCE_OLLAMA in requested_sources:
-        entries.extend(scan_ollama())
+        entries.extend(ollama_scanner.scan())
     if SOURCE_HUGGINGFACE in requested_sources:
-        entries.extend(scan_huggingface())
+        entries.extend(hugging_face_scanner.scan())
     if SOURCE_LMSTUDIO in requested_sources:
-        entries.extend(scan_lmstudio())
+        entries.extend(lmstudio_scanner.scan())
 
     if not args.no_stray:
         home = Path.home()
         skip_dirs = default_skip_dirs(home)
-        skip_dirs |= hf_known_paths()
-        skip_dirs |= ollama_known_paths()
-        skip_dirs |= lms_known_paths()
+        skip_dirs |= ollama_scanner.collect_known_paths()
+        skip_dirs |= hugging_face_scanner.collect_known_paths()
+        skip_dirs |= lmstudio_scanner.collect_known_paths()
 
         scan_roots: list[Path] = [home]
         for extra in args.path:
             scan_roots.append(Path(extra).expanduser())
 
+        stray_scanner = StrayScanner(scan_roots, skip_dirs)
         stray_entries: list[ModelEntry] = []
         try:
             with console.status(
                 "[bold]Scanning for stray models...[/bold] (Ctrl-C to stop)",
                 spinner="dots",
             ):
-                for entry in iter_stray(scan_roots, skip_dirs):
+                for entry in stray_scanner.scan():
                     stray_entries.append(entry)
         except KeyboardInterrupt:
             console.print(

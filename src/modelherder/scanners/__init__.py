@@ -1,12 +1,12 @@
-from modelherder.scanners.huggingface import scan_huggingface
-from modelherder.scanners.ollama import scan_ollama
-from modelherder.scanners.lmstudio import scan_lmstudio
-from modelherder.scanners.stray import iter_stray, default_skip_dirs
+from modelherder.scanners.huggingface import HuggingFaceScanner
+from modelherder.scanners.lmstudio import LMStudioScanner
+from modelherder.scanners.ollama import OllamaScanner
+from modelherder.scanners.stray import StrayScanner, default_skip_dirs
 
 __all__ = [
-    "scan_huggingface",
-    "scan_ollama",
-    "scan_lmstudio",
-    "iter_stray",
+    "HuggingFaceScanner",
+    "LMStudioScanner",
+    "OllamaScanner",
+    "StrayScanner",
     "default_skip_dirs",
 ]

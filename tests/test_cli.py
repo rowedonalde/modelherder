@@ -19,38 +19,54 @@ from modelherder.models import (
 FAKE_HOME = Path("/home/fakeuser")
 
 
-def _fake_scan(entries: list[ModelEntry]):
-    """Build a fake scan_* callable that returns a copy of the given list."""
+def _make_fake_scanner_class(
+    entries: list[ModelEntry], counter: dict, key: str
+):
+    """Build a fake scanner class for HF / Ollama / LM Studio.
 
-    def _scan() -> list[ModelEntry]:
-        return list(entries)
-
-    return _scan
-
-
-class _FakeIterStray:
-    """Generator-style fake for iter_stray that captures call args.
-
-    Mirrors the real signature `iter_stray(roots, skip_dirs)` and yields the
-    pre-configured entries. Optionally raises KeyboardInterrupt partway
-    through to exercise the cancel path.
+    Bumps counter[key] only when .scan() is called — not when the class is
+    instantiated. The CLI constructs these scanners unconditionally so it can
+    call collect_known_paths() during the stray scan, so counting in __init__
+    would over-count.
     """
+    entries_copy = list(entries)
 
-    def __init__(
-        self,
-        entries: list[ModelEntry],
-        raise_after: int | None = None,
-    ) -> None:
-        self.entries = entries
-        self.raise_after = raise_after
-        self.calls: list[tuple[list[Path], set[Path]]] = []
+    class _FakeScanner:
+        def __init__(self, *args, **kwargs):
+            pass
 
-    def __call__(self, roots, skip_dirs):
-        self.calls.append((list(roots), set(skip_dirs)))
-        for i, entry in enumerate(self.entries):
-            if self.raise_after is not None and i == self.raise_after:
-                raise KeyboardInterrupt
-            yield entry
+        def scan(self):
+            counter[key] += 1
+            return list(entries_copy)
+
+        def collect_known_paths(self):
+            return set()
+
+    return _FakeScanner
+
+
+def _make_fake_stray_scanner_class(
+    entries: list[ModelEntry], raise_after: int | None = None
+):
+    """Build a fake StrayScanner class.
+
+    Captures the (roots, skip_dirs) it was constructed with, and yields the
+    pre-configured entries from scan(). Optionally raises KeyboardInterrupt
+    partway through to exercise the cancel path.
+    """
+    calls: list[tuple[list[Path], set[Path]]] = []
+
+    class _FakeStrayScanner:
+        def __init__(self, roots, skip_dirs):
+            calls.append((list(roots), set(skip_dirs)))
+
+        def scan(self):
+            for i, entry in enumerate(entries):
+                if raise_after is not None and i == raise_after:
+                    raise KeyboardInterrupt
+                yield entry
+
+    return _FakeStrayScanner, calls
 
 
 class _RunResult:
@@ -144,39 +160,35 @@ class MainTests(unittest.TestCase):
         ollama: list[ModelEntry] | None = None,
         hf: list[ModelEntry] | None = None,
         lms: list[ModelEntry] | None = None,
-        stray: _FakeIterStray | None = None,
+        stray: list[ModelEntry] | None = None,
+        raise_after: int | None = None,
     ):
-        """Apply all the patches main() depends on as a single context manager."""
-        ollama_fake = _fake_scan(ollama or [])
-        hf_fake = _fake_scan(hf or [])
-        lms_fake = _fake_scan(lms or [])
-        stray_fake = stray or _FakeIterStray([])
-        # Track scan invocations by wrapping each fake.
+        """Build the fake classes main() will see."""
         self.scan_calls = {"ollama": 0, "hf": 0, "lms": 0}
-
-        def counted(name, fn):
-            def _wrapped():
-                self.scan_calls[name] += 1
-                return fn()
-
-            return _wrapped
-
-        return contextlib.ExitStack(), {
-            "ollama": counted("ollama", ollama_fake),
-            "hf": counted("hf", hf_fake),
-            "lms": counted("lms", lms_fake),
-            "stray": stray_fake,
+        stray_cls, stray_calls = _make_fake_stray_scanner_class(
+            stray or [], raise_after=raise_after
+        )
+        fakes = {
+            "ollama_cls": _make_fake_scanner_class(
+                ollama or [], self.scan_calls, "ollama"
+            ),
+            "hf_cls": _make_fake_scanner_class(
+                hf or [], self.scan_calls, "hf"
+            ),
+            "lms_cls": _make_fake_scanner_class(
+                lms or [], self.scan_calls, "lms"
+            ),
+            "stray_cls": stray_cls,
+            "stray_calls": stray_calls,
         }
+        return contextlib.ExitStack(), fakes
 
     def _apply(self, stack, fakes):
-        stack.enter_context(patch.object(cli, "scan_ollama", new=fakes["ollama"]))
-        stack.enter_context(patch.object(cli, "scan_huggingface", new=fakes["hf"]))
-        stack.enter_context(patch.object(cli, "scan_lmstudio", new=fakes["lms"]))
-        stack.enter_context(patch.object(cli, "iter_stray", new=fakes["stray"]))
+        stack.enter_context(patch.object(cli, "OllamaScanner", new=fakes["ollama_cls"]))
+        stack.enter_context(patch.object(cli, "HuggingFaceScanner", new=fakes["hf_cls"]))
+        stack.enter_context(patch.object(cli, "LMStudioScanner", new=fakes["lms_cls"]))
+        stack.enter_context(patch.object(cli, "StrayScanner", new=fakes["stray_cls"]))
         stack.enter_context(patch.object(cli, "default_skip_dirs", new=lambda home: set()))
-        stack.enter_context(patch.object(cli, "hf_known_paths", new=lambda: set()))
-        stack.enter_context(patch.object(cli, "ollama_known_paths", new=lambda: set()))
-        stack.enter_context(patch.object(cli, "lms_known_paths", new=lambda: set()))
         # Pin Path.home() for deterministic --path / scan_roots assertions.
         stack.enter_context(patch.object(cli.Path, "home", classmethod(lambda cls: FAKE_HOME)))
 
@@ -187,7 +199,7 @@ class MainTests(unittest.TestCase):
             result = _run_main([])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(self.scan_calls, {"ollama": 1, "hf": 1, "lms": 1})
-        self.assertEqual(len(fakes["stray"].calls), 1)
+        self.assertEqual(len(fakes["stray_calls"]), 1)
         # No entries → the "no model files found" message goes to stdout.
         self.assertIn("No model files found.", result.stdout)
 
@@ -197,7 +209,7 @@ class MainTests(unittest.TestCase):
             self._apply(stack, fakes)
             result = _run_main(["--no-stray"])
         self.assertEqual(result.exit_code, 0)
-        self.assertEqual(fakes["stray"].calls, [])
+        self.assertEqual(fakes["stray_calls"], [])
 
     def test_sources_subset_runs_only_selected_scanners(self) -> None:
         stack, fakes = self._patches()
@@ -214,7 +226,7 @@ class MainTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 2)
         self.assertIn("unknown source(s): nope", result.stderr)
         self.assertEqual(self.scan_calls, {"ollama": 0, "hf": 0, "lms": 0})
-        self.assertEqual(fakes["stray"].calls, [])
+        self.assertEqual(fakes["stray_calls"], [])
 
     def test_json_output_is_parseable_and_on_stdout(self) -> None:
         entry = ModelEntry(SOURCE_OLLAMA, "llama3:8b", "GGUF", 1024, "/tmp/m.gguf")
@@ -244,11 +256,13 @@ class MainTests(unittest.TestCase):
     def test_keyboard_interrupt_during_stray_keeps_partial_results(self) -> None:
         kept = ModelEntry("other", "stray-a", "GGUF", 1, "/tmp/a.gguf")
         # raise_after=1 → yields the first entry, then raises before the second.
-        stray = _FakeIterStray(
-            [kept, ModelEntry("other", "stray-b", "GGUF", 2, "/tmp/b.gguf")],
+        stack, fakes = self._patches(
+            stray=[
+                kept,
+                ModelEntry("other", "stray-b", "GGUF", 2, "/tmp/b.gguf"),
+            ],
             raise_after=1,
         )
-        stack, fakes = self._patches(stray=stray)
         with stack:
             self._apply(stack, fakes)
             result = _run_main(["--json"])
@@ -257,12 +271,12 @@ class MainTests(unittest.TestCase):
         self.assertEqual([e["name"] for e in parsed], ["stray-a"])
         self.assertIn("Stray scan cancelled", result.stderr)
 
-    def test_extra_path_is_forwarded_to_iter_stray(self) -> None:
+    def test_extra_path_is_forwarded_to_stray_scanner(self) -> None:
         stack, fakes = self._patches()
         with stack:
             self._apply(stack, fakes)
             _run_main(["--path", "/tmp/extra"])
-        self.assertEqual(len(fakes["stray"].calls), 1)
-        roots, _ = fakes["stray"].calls[0]
+        self.assertEqual(len(fakes["stray_calls"]), 1)
+        roots, _ = fakes["stray_calls"][0]
         self.assertIn(FAKE_HOME, roots)
         self.assertIn(Path("/tmp/extra"), roots)
