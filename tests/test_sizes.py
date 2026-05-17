@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import unittest
 
 from modelherder.sizes import human_size

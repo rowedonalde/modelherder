@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-
 def human_size(num_bytes: int) -> str:
     """Format a byte count as a short human-readable 2^10 string (e.g. '4.1 GiB')."""
     if num_bytes < 0:
