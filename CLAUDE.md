@@ -1,8 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code working in this repo. The product spec lives in
-[`INSTRUCTIONS.md`](./INSTRUCTIONS.md) — read it before adding features or
-changing scanner behaviour.
+Guidance for Claude Code working in this repo.
 
 ## What this is
 
