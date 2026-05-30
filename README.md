@@ -6,12 +6,22 @@ HuggingFace, and LM Studio, and resolves opaque blob hashes back to
 human-readable model names. It also does an opportunistic recursive scan
 from your home directory for stray model files those tools don't know about.
 
-## Requirements
+## Install
 
-- Python 3.13+
-- [uv](https://docs.astral.sh/uv/) for environment and execution
+### Homebrew (recommended)
 
-## Install / run
+```sh
+brew install rowedonalde/tap/modelherder
+```
+
+This pulls from the [`rowedonalde/homebrew-tap`](https://github.com/rowedonalde/homebrew-tap)
+tap and installs a self-contained `modelherder` command on your `PATH`. To
+track the latest commit on `main` instead of the tagged release, add
+`--HEAD`.
+
+### From source with uv
+
+Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/):
 
 ```sh
 uv sync

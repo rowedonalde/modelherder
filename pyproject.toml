@@ -1,6 +1,6 @@
 [project]
 name = "modelherder"
-version = "0.1.0"
+version = "0.3.0"
 description = "Inventory generative AI model files installed on your machine"
 readme = "README.md"
 license = "MIT"
