@@ -99,6 +99,17 @@ The model layer is identified by `mediaType ==
 `sha256:abc...` but blobs on disk are named `sha256-abc...` — the scanner
 swaps the separator.
 
+### Ignore marker (`.modelherderignore`)
+
+The stray scan skips any directory (and its whole subtree) that contains a
+file named `.modelherderignore` — see `IGNORE_MARKER` in `stray.py`. This is
+the `.gitignore`-style escape hatch for trees you never want inventoried.
+
+One such marker lives at `tests/scanners/fakemodels/.modelherderignore` so a
+real scan on a dev machine doesn't list this project's own checked-in
+fixtures. The scanner's own tests are unaffected because they walk from
+*inside* `fakemodels/stray/`, below the marker.
+
 ### Output streams
 
 JSON and the table both go to stdout. The Rich spinner / status message and

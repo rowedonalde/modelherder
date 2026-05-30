@@ -91,6 +91,20 @@ results found so far are printed.
 
 If a known-source directory doesn't exist, the scanner skips it silently.
 
+### Ignoring directories
+
+To keep the stray scan out of a directory, drop an empty file named
+`.modelherderignore` in it. That directory and everything beneath it is
+skipped — a `.gitignore`-style escape hatch for trees full of model-shaped
+files you never want inventoried (datasets, fixtures, scratch checkpoints).
+
+```sh
+touch /path/to/keep-out/.modelherderignore
+```
+
+This only affects the stray scan; the source-specific scanners always look
+at their own known locations.
+
 ## Notes
 
 - HuggingFace results are aggregated per (model, format), so a sharded

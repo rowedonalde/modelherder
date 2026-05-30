@@ -47,6 +47,28 @@ class StrayScannerTests(unittest.TestCase):
         # The valid root still contributes despite the missing one.
         self.assertTrue(entries)
 
+    def test_ignore_marker_excludes_directory_subtree(self) -> None:
+        # A directory containing a .modelherderignore marker (and everything
+        # below it) must be skipped entirely.
+        ignored_dir = FIXTURES / "project" / "ignored_subtree"
+        ignored_dir.mkdir(parents=True, exist_ok=True)
+        marker = ignored_dir / ".modelherderignore"
+        marker.write_text("")
+        hidden = ignored_dir / "secret.gguf"
+        hidden.write_bytes(b"x")
+        try:
+            entries = list(
+                StrayScanner(roots=[FIXTURES], skip_dirs=set()).scan()
+            )
+            names = {Path(e.path).name for e in entries}
+            self.assertNotIn("secret.gguf", names)
+            # Sibling files outside the ignored subtree still show up.
+            self.assertIn("checkpoint.pt", names)
+        finally:
+            hidden.unlink()
+            marker.unlink()
+            ignored_dir.rmdir()
+
     def test_bin_files_are_not_picked_up_by_stray_scan(self) -> None:
         # STRAY_EXTS intentionally excludes .bin — confirm by adding one and
         # making sure it is not in the results.

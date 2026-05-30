@@ -33,6 +33,13 @@ NOISE_DIR_NAMES = frozenset({
 })
 
 
+# A directory containing a file with this name (and everything beneath it) is
+# skipped by the stray scan. It's the escape hatch for trees you never want
+# inventoried — e.g. this project's own test fixtures, or any model-shaped
+# files a user wants ignored. Analogous in spirit to .gitignore.
+IGNORE_MARKER = ".modelherderignore"
+
+
 def default_skip_dirs(home: Path) -> set[Path]:
     """Resolved paths that the stray scan should never enter."""
     candidates = (
@@ -92,6 +99,12 @@ class StrayScanner(BaseScanner):
             # subdirectories in-place so we never even stat their contents.
             for dirpath, dirnames, filenames in os.walk(root_resolved, followlinks=False):
                 current = Path(dirpath)
+
+                # An ignore marker prunes this directory and its whole subtree:
+                # stop descending and skip its files.
+                if (current / IGNORE_MARKER).exists():
+                    dirnames[:] = []
+                    continue
 
                 kept: list[str] = []
                 for d in dirnames:

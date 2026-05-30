@@ -31,6 +31,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="modelherder",
         description="Inventory generative AI model files installed on your machine.",
+        epilog=(
+            "Ignoring directories: place an empty file named "
+            "'.modelherderignore' in any directory to skip it (and everything "
+            "beneath it) during the stray scan."
+        ),
     )
     parser.add_argument(
         "--sources",
